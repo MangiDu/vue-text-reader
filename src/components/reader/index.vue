@@ -1,14 +1,13 @@
 <template lang="html">
   <div class="reader__wrapper">
     <div class="reader__settings">
-      <input type="number" v-model="fontSize" min="12">
+      <!-- <input type="number" v-model="fontSize" min="12"> -->
       <span @click="changePage('prev')">上一页</span>
       <span @click="changePage('next')">下一页</span>
-      {{ activePage }}
     </div>
-    <div class="reader__content" :style="{'font-size': fontSize + 'px', 'height': contentHeight + 'px', 'margin-top': marginGap + 'px', 'line-height': lineHeight}">
-      <div class="reader__text" ref="text">
-      </div>
+    <div class="reader__content" :style="{'font-size': fontSize + 'px', 'height': contentHeight + 'px', 'margin-top': marginGap + 'px', 'line-height': lineHeight, 'margin-top': -1 * fontSize * lineHeight * activePage.topHiddenLineCount + 'px'}">
+      <div class="reader__text" ref="text"></div>
+      <div class="reader__text" v-html="currentContent"></div>
     </div>
   </div>
 </template>
@@ -33,6 +32,9 @@ export default {
       lineHeight: 2,
       // 加载状态
       loading: false,
+      // 文本数据
+      maxLineCount: -1,
+      pageList: [],
       // 阅读状态
       page: 1,
       activePage: {}
@@ -43,19 +45,35 @@ export default {
       // 将text文本转成html段落的字符串
       let pArr = this.text.split('\n')
       let paragraphArr = []
-      for (let paragraph of pArr) {
+      pArr.forEach(function (paragraph, idx) {
         let result = paragraph.match(INDENT_PATTERN)
         let indentCount = (result && result[0] && result[0].length) || 0
         paragraphArr.push({
-          html: getHtmlString('p', paragraph.substring(indentCount))
+          html: getHtmlString('p', idx + paragraph.substring(indentCount))
         })
-      }
+      })
+
       return paragraphArr
+    },
+    currentContent () {
+      // 当前阅读页面
+      if (!this.pageList || !this.pageList.length) return ''
+      let htmlString = ''
+      let currentPageInfo = this.pageList[this.page - 1]
+      let startIdx = currentPageInfo.startIdx || 0
+      let endIdx = currentPageInfo.endIdx || (this.paragraphArr.length - 1)
+      for (let i = startIdx; i <= endIdx; i++) {
+        htmlString += this.paragraphArr[i].html
+      }
+      return htmlString
     }
   },
   watch: {
     text () {
       if (!this.text || !this.text.length) return
+      this.getPageList()
+    },
+    maxLineCount () {
       this.getPageList()
     }
   },
@@ -88,6 +106,8 @@ export default {
       if (!this.paragraphArr || !this.paragraphArr.length) {
         return []
       }
+      // 重置页码为1
+      this.page = 1
       // 把段落数组插入文档中
       this.$refs.text.innerHTML = this.paragraphArr.map(item => item.html).join('')
       let paraEls = this.$refs.text.children
@@ -111,7 +131,8 @@ export default {
             pageInfo.topHiddenLineCount = this.paragraphArr[paraIndex].lineCount - prevPageInfo.bottomHiddenLineCount
           }
         }
-        let count = 0
+        // 需要把隐藏的顶部行数计算进去
+        let count = -1 * pageInfo.topHiddenLineCount
         for (let idx = paraIndex; idx < this.paragraphArr.length; idx++) {
           let paraItem = this.paragraphArr[idx]
           count += paraItem.lineCount
@@ -126,7 +147,7 @@ export default {
         pageList.push(pageInfo)
       } while (paraIndex < this.paragraphArr.length)
       this.pageList = pageList
-      console.log(pageList)
+      this.$refs.text.innerHTML = ''
       this.setPage()
     },
     changePage (direction) {
@@ -163,7 +184,9 @@ function getHtmlString (name, content) {
   position: relative;
 }
 .reader__settings {
-  position: absolute;
+  position: fixed;
+  top: 50%;
+  left: 0;
 }
 .reader__content {
   position: relative;
