@@ -1,6 +1,6 @@
-# vue-text-reader
+# [WIP]vue-text-reader
 
-> vue text reader 
+> vue text reader
 
 ## Build Setup
 
