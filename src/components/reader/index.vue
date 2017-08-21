@@ -36,8 +36,9 @@ export default {
       maxLineCount: -1,
       pageList: [],
       // 阅读状态
-      page: 1,
-      activePage: {}
+      page: 1, // 当前阅读页，永远比index大1
+      activePage: {},
+      anchor: {}
     }
   },
   computed: {
@@ -74,7 +75,9 @@ export default {
       this.getPageList()
     },
     maxLineCount () {
-      this.getPageList()
+      this.getPageList({
+        lineCountChanged: true
+      })
     }
   },
   mounted () {
@@ -102,7 +105,7 @@ export default {
       this.maxLineCount = maxLineCount
       this.contentHeight = maxLineCount * this.fontSize * this.lineHeight
     },
-    getPageList () {
+    getPageList (option) {
       if (!this.paragraphArr || !this.paragraphArr.length) {
         return []
       }
@@ -148,7 +151,7 @@ export default {
       } while (paraIndex < this.paragraphArr.length)
       this.pageList = pageList
       this.$refs.text.innerHTML = ''
-      this.setPage()
+      this.setPage(option)
     },
     changePage (direction) {
       switch (direction) {
@@ -168,8 +171,31 @@ export default {
         default:
       }
     },
-    setPage () {
-      this.activePage = this.pageList[this.page - 1]
+    setPage (option = {}) {
+      let pageObj
+      if (option.lineCountChanged) {
+        // 如果是resize引发的页面重排，则要重置当前页码和设置包含之前阅读位置的页面对象
+        let paraIdx = this.anchor.paraIdx
+        let startLineCount = this.anchor.startLineCount
+        let paraLineCount = this.paragraphArr[paraIdx] && this.paragraphArr[paraIdx].lineCount
+        for (let i = 0; i < this.pageList.length; i++) {
+          let page = this.pageList[i]
+          if ((paraIdx > page.startIdx && paraIdx < page.endIdx) || (paraIdx === page.startIdx && page.topHiddenLineCount < startLineCount) || (paraIdx === page.endIdx && page.bottomHiddenLineCount < (paraLineCount - startLineCount + 1))) {
+            this.page = i + 1
+            pageObj = page
+            break
+          }
+        }
+      } else {
+        pageObj = this.pageList[this.page - 1]
+      }
+      if (pageObj && pageObj.startIdx !== undefined) {
+        this.activePage = pageObj
+        this.anchor = {
+          paraIdx: pageObj.startIdx,
+          startLineCount: pageObj.topHiddenLineCount + 1
+        }
+      }
     }
   }
 }
