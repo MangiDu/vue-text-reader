@@ -5,7 +5,7 @@
       <span @click="changePage('prev')">上一页</span>
       <span @click="changePage('next')">下一页</span>
     </div>
-    <div class="reader__content" :style="{'font-size': fontSize + 'px', 'height': contentHeight + 'px', 'margin-top': marginGap + 'px', 'line-height': lineHeight}">
+    <div class="reader__content" :style="{'width': '80%', 'font-size': fontSize + 'px', 'height': contentHeight + 'px', 'margin-top': marginGap + 'px', 'line-height': lineHeight}">
       <div class="reader__text" ref="text"></div>
       <div class="reader__text" v-html="currentContent" :style="{'margin-top': -1 * fontSize * lineHeight * activePage.topHiddenLineCount + 'px'}"></div>
     </div>
@@ -218,7 +218,6 @@ function getHtmlString (name, content) {
   position: relative;
   margin-left: auto;
   margin-right: auto;
-  width: 60%;
   overflow: hidden;
 }
 .reader__text p {
