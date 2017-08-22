@@ -1,11 +1,11 @@
 <template lang="html">
-  <div class="reader__wrapper">
-    <div class="reader__settings">
+  <div class="reader__wrapper" :style="{'padding-top': marginGap + 'px'}">
+    <div class="reader__settings" :style="{'height': marginGap + 'px', 'line-height': marginGap + 'px'}">
       <!-- <input type="number" v-model="fontSize" min="12"> -->
-      <span @click="changePage('prev')">上一页</span>
-      <span @click="changePage('next')">下一页</span>
+      <span v-if="page > 1" @click="changePage('prev')">上一页</span>
+      <span v-if="page < pageList.length" @click="changePage('next')">下一页</span>
     </div>
-    <div class="reader__content" :style="{'width': '80%', 'font-size': fontSize + 'px', 'height': contentHeight + 'px', 'margin-top': marginGap + 'px', 'line-height': lineHeight}">
+    <div class="reader__content" :style="{'width': contentWidth + 'px', 'height': contentHeight + 'px', 'font-size': fontSize + 'px', 'line-height': lineHeight}">
       <div class="reader__text" ref="text"></div>
       <div class="reader__text" v-html="currentContent" :style="{'margin-top': -1 * fontSize * lineHeight * activePage.topHiddenLineCount + 'px'}"></div>
     </div>
@@ -22,10 +22,13 @@ export default {
   },
   data () {
     return {
-      // 间距高度
+      // 间距高度宽度等
       marginGap: 20,
       contentMinHeight: 350,
       contentHeight: 0,
+      contentWidthBoundary: 800,
+      contentMinWidth: 400,
+      contentWidth: 0,
       resizeDebounce: 500,
       // 文本样式
       fontSize: 16,
@@ -73,15 +76,10 @@ export default {
     text () {
       if (!this.text || !this.text.length) return
       this.getPageList()
-    },
-    maxLineCount () {
-      this.getPageList({
-        lineCountChanged: true
-      })
     }
   },
   mounted () {
-    this.getContentHeight()
+    this.getContentSize()
     // 窗口resize时要自适应高度，不产生滚动条
     this._resizeHandler = this.onWindowResize.bind(this)
     window.addEventListener('resize', this._resizeHandler)
@@ -95,15 +93,34 @@ export default {
       if (this._resizeTimer) {
         clearTimeout(this._resizeTimer)
       }
-      this._resizeTimer = setTimeout(this.getContentHeight.bind(this), this.resizeDebounce)
+      this._resizeTimer = setTimeout(this.getContentSize.bind(this), this.resizeDebounce)
     },
-    getContentHeight () {
+    getContentSize () {
+      // 计算内容高度
       let windowHeight = window.innerHeight
       let minHeight = this.contentMinHeight
-      let contentHeight = (windowHeight > minHeight ? windowHeight : minHeight) - this.marginGap * 2
+      let contentHeight = Math.max(windowHeight, minHeight) - this.marginGap * 2
       let maxLineCount = Math.floor(contentHeight / (this.fontSize * this.lineHeight))
       this.maxLineCount = maxLineCount
       this.contentHeight = maxLineCount * this.fontSize * this.lineHeight
+      // 计算内容宽度
+      let windowWidth = window.innerWidth
+
+      let widthBoundary = this.contentWidthBoundary
+      let widthRadio
+      if (windowWidth > widthBoundary) widthRadio = 0.6
+      else if (windowWidth > this.contentMinWidth) {
+        widthRadio = 0.6 + 0.4 * (Math.abs(widthBoundary - windowWidth) / (widthBoundary - this.contentMinWidth))
+      } else widthRadio = 1
+
+      let wantedWidth = windowWidth * widthRadio
+
+      this.contentWidth = windowWidth > this.contentMinWidth ? wantedWidth : windowWidth
+      this.$nextTick(() => {
+        this.getPageList({
+          sizeChanged: true
+        })
+      })
     },
     getPageList (option) {
       if (!this.paragraphArr || !this.paragraphArr.length) {
@@ -173,7 +190,7 @@ export default {
     },
     setPage (option = {}) {
       let pageObj
-      if (option.lineCountChanged) {
+      if (option.sizeChanged) {
         // 如果是resize引发的页面重排，则要重置当前页码和设置包含之前阅读位置的页面对象
         let paraIdx = this.anchor.paraIdx
         let startLineCount = this.anchor.startLineCount
@@ -208,11 +225,15 @@ function getHtmlString (name, content) {
 <style lang="css">
 .reader__wrapper {
   position: relative;
+  height: 100%;
+  box-sizing: border-box;
 }
 .reader__settings {
-  position: fixed;
-  top: 50%;
+  position: absolute;
+  bottom: 0;
   left: 0;
+  width: 100%;
+  text-align: center;
 }
 .reader__content {
   position: relative;
