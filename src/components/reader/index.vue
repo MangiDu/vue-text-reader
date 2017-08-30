@@ -13,7 +13,6 @@
 </template>
 
 <script>
-const INDENT_PATTERN = /^\s{1,}/
 export default {
   props: {
     text: {
@@ -49,12 +48,16 @@ export default {
       // 将text文本转成html段落的字符串
       let pArr = this.text.split('\n')
       let paragraphArr = []
+      let wordsCount = 0
       pArr.forEach(function (paragraph, idx) {
-        let result = paragraph.match(INDENT_PATTERN)
-        let indentCount = (result && result[0] && result[0].length) || 0
+        let content = paragraph.trim()
+        let contentLength = content.length
+        // 为每个字添加index定位信息
+        content = content.split('').map((word, index) => `<span word-index="${wordsCount + index}">${word}</span>`).join('')
         paragraphArr.push({
-          html: getHtmlString('p', idx + paragraph.substring(indentCount))
+          html: getHtmlString('p', content)
         })
+        wordsCount += contentLength
       })
 
       return paragraphArr
@@ -227,6 +230,7 @@ function getHtmlString (name, content) {
   position: relative;
   height: 100%;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .reader__settings {
   position: absolute;
