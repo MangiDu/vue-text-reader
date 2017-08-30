@@ -225,7 +225,7 @@ function getHtmlString (name, content) {
 }
 </script>
 
-<style lang="css">
+<style lang="less">
 .reader__wrapper {
   position: relative;
   height: 100%;
