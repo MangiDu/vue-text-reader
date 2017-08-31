@@ -53,9 +53,15 @@ export default {
         let content = paragraph.trim()
         let contentLength = content.length
         // 为每个字添加index定位信息
-        content = content.split('').map((word, index) => `<span word-index="${wordsCount + index}">${word}</span>`).join('')
+        content = content.split('').map((word, index) => getHtmlString('span', word, {
+          'word-index': wordsCount + index
+        })).join('')
         paragraphArr.push({
-          html: getHtmlString('p', content)
+          html: getHtmlString('p', content, {
+            'para-index': idx
+          }),
+          wordStartIdx: wordsCount,
+          wordEndIdx: wordsCount + (contentLength - 1)
         })
         wordsCount += contentLength
       })
@@ -67,8 +73,8 @@ export default {
       if (!this.pageList || !this.pageList.length) return ''
       let htmlString = ''
       let currentPageInfo = this.pageList[this.page - 1]
-      let startIdx = currentPageInfo.startIdx || 0
-      let endIdx = currentPageInfo.endIdx || (this.paragraphArr.length - 1)
+      let startIdx = currentPageInfo.paraStartIdx || 0
+      let endIdx = currentPageInfo.paraEndIdx || (this.paragraphArr.length - 1)
       for (let i = startIdx; i <= endIdx; i++) {
         htmlString += this.paragraphArr[i].html
       }
@@ -144,7 +150,7 @@ export default {
       // let hiddenLineCount = 0
       do {
         let pageInfo = {
-          startIdx: paraIndex,
+          paraStartIdx: paraIndex,
           topHiddenLineCount: 0
         }
         if (pageList.length) {
@@ -162,14 +168,62 @@ export default {
           if (count <= maxLineCount) {
             paraIndex += 1
           } else {
-            pageInfo.endIdx = idx
+            pageInfo.paraEndIdx = idx
             pageInfo.bottomHiddenLineCount = count - maxLineCount
             break
           }
         }
         pageList.push(pageInfo)
       } while (paraIndex < this.paragraphArr.length)
+
+      // TODO：页面载入时惰性求值并保存
+      // TODO：写成工具方法
+      // 如果在初始化时计算所有页面的边界，在超长段落的情况下，可能会花费太久时间
+      // 计算并设置每页的边界字idx
+      pageList.forEach((page) => {
+        // 计算起始文字定位边界
+        let paraIdx = page.paraStartIdx
+        let paraInfo = this.paragraphArr[paraIdx]
+        let paraEl = document.querySelector(`p[para-index="${paraIdx}"]`)
+
+        let paraOffsetTop = paraEl.offsetTop
+        let topLineCount = page.topHiddenLineCount
+
+        for (let i = paraInfo.wordStartIdx, count = paraInfo.wordEndIdx; i <= count; i++) {
+          let spanEl = document.querySelector(`span[word-index="${i}"]`)
+          // 因为此时全部的段落和文字都在文档中，所以要减去段落的偏移
+          let offsetTop = spanEl.offsetTop - paraOffsetTop
+          if (offsetTop > topLineCount * (this.fontSize * this.lineHeight)) {
+            // 如果高出了段落顶部隐藏的高度就说明已经到显示的正文区域了
+            page.wordStartIdx = i
+            break
+          }
+        }
+
+        // 计算结束文字定位边界
+        // 如果没有末尾定位信息，可能是两种情况：1. 还没有内容时； 2. 末尾页； 默认使用最后一段
+        paraIdx = page.paraEndIdx || this.paragraphArr.length - 1
+        paraInfo = this.paragraphArr[paraIdx]
+        paraEl = document.querySelector(`p[para-index="${paraIdx}"]`)
+
+        paraOffsetTop = paraEl.offsetTop
+        let bottomHiddenLineCount = page.bottomHiddenLineCount
+        topLineCount = paraInfo.lineCount - bottomHiddenLineCount
+
+        for (let i = paraInfo.wordStartIdx, count = paraInfo.wordEndIdx; i <= count; i++) {
+          let spanEl = document.querySelector(`span[word-index="${i}"]`)
+          // 因为此时全部的段落和文字都在文档中，所以要减去段落的偏移
+          let offsetTop = spanEl.offsetTop - paraOffsetTop
+          if (offsetTop > topLineCount * (this.fontSize * this.lineHeight)) {
+            // 如果高出了段落顶部隐藏的高度就说明已经离开正文区域到隐藏区域了
+            page.wordEndIdx = i - 1
+            break
+          }
+        }
+      })
+
       this.pageList = pageList
+
       this.$refs.text.innerHTML = ''
       this.setPage(option)
     },
@@ -200,7 +254,7 @@ export default {
         let paraLineCount = this.paragraphArr[paraIdx] && this.paragraphArr[paraIdx].lineCount
         for (let i = 0; i < this.pageList.length; i++) {
           let page = this.pageList[i]
-          if ((paraIdx > page.startIdx && paraIdx < page.endIdx) || (paraIdx === page.startIdx && page.topHiddenLineCount < startLineCount) || (paraIdx === page.endIdx && page.bottomHiddenLineCount < (paraLineCount - startLineCount + 1))) {
+          if ((paraIdx > page.paraStartIdx && paraIdx < page.paraEndIdx) || (paraIdx === page.paraStartIdx && page.topHiddenLineCount < startLineCount) || (paraIdx === page.paraEndIdx && page.bottomHiddenLineCount < (paraLineCount - startLineCount + 1))) {
             this.page = i + 1
             pageObj = page
             break
@@ -209,10 +263,10 @@ export default {
       } else {
         pageObj = this.pageList[this.page - 1]
       }
-      if (pageObj && pageObj.startIdx !== undefined) {
+      if (pageObj && pageObj.paraStartIdx !== undefined) {
         this.activePage = pageObj
         this.anchor = {
-          paraIdx: pageObj.startIdx,
+          paraIdx: pageObj.paraStartIdx,
           startLineCount: pageObj.topHiddenLineCount + 1
         }
       }
@@ -220,8 +274,12 @@ export default {
   }
 }
 
-function getHtmlString (name, content) {
-  return `<${name}>${content}</${name}>`
+function getHtmlString (name, content, attributes = {}) {
+  let attrArr = []
+  for (let key in attributes) {
+    attrArr.push(` ${key}="${attributes[key]}"`)
+  }
+  return `<${name}${attrArr.join('')}>${content}</${name}>`
 }
 </script>
 
